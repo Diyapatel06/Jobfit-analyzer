@@ -380,10 +380,13 @@ function App() {
   const [file, setFile] = useState(null)
   const [jdText, setJdText] = useState('')
   const [platform, setPlatform] = useState(null)
+  const [role, setRole] = useState('')
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState(null)
   const [error, setError] = useState(null)
   const [dark, setDark] = useState(true)
+  const [downloadLoading, setDownloadLoading] = useState(false)
+  const [downloadSuccess, setDownloadSuccess] = useState(false)
 
   // Supporting UI state for responsive polish and loading feedback.
   const [loadingIndex, setLoadingIndex] = useState(0)
@@ -445,12 +448,14 @@ function App() {
     formData.append('file', file)
     formData.append('jd_text', jdText)
     formData.append('platform', platform || '')
+    formData.append('role', role)
 
     try {
       setLoadingIndex(0)
       setLoading(true)
       setError(null)
       setResults(null)
+      setDownloadSuccess(false)
 
       const response = await axios.post('http://localhost:8000/upload', formData)
       setResults(response.data)
@@ -467,26 +472,36 @@ function App() {
 
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('jd_text', jdText)
-    formData.append('platform', platform || '')
+    if (jdText) formData.append('jd_text', jdText)
+    if (platform) formData.append('platform', platform)
+    formData.append('role', role)
 
     try {
+      setDownloadLoading(true)
+      setDownloadSuccess(false)
       setError(null)
+
       const response = await axios.post('http://localhost:8000/download', formData, {
         responseType: 'blob',
       })
 
-      const blob = new Blob([response.data], { type: 'text/plain' })
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `optimized_resume_${platform || 'general'}.txt`
+      link.download = `optimized_resume_${platform || 'general'}.docx`
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
+      setDownloadSuccess(true)
     } catch (requestError) {
       setError(requestError?.message || 'Failed to download the optimized resume.')
+      setDownloadSuccess(false)
+    } finally {
+      setDownloadLoading(false)
     }
   }
 
@@ -495,9 +510,12 @@ function App() {
     setFile(null)
     setJdText('')
     setPlatform(null)
+    setRole('')
     setLoading(false)
     setResults(null)
     setError(null)
+    setDownloadLoading(false)
+    setDownloadSuccess(false)
   }
 
   return (
@@ -850,6 +868,45 @@ function App() {
                 </div>
               </div>
 
+              {/* Optional target role selector used for backend analysis context. */}
+              <div>
+                <label
+                  htmlFor="role-select"
+                  style={{
+                    display: 'block',
+                    marginBottom: 10,
+                    color: theme.muted,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: '0.12em',
+                  }}
+                >
+                  TARGET ROLE (Optional)
+                </label>
+                <select
+                  id="role-select"
+                  value={role}
+                  onChange={(event) => setRole(event.target.value)}
+                  style={{
+                    width: '100%',
+                    background: dark ? 'rgba(255,255,255,0.02)' : theme.card,
+                    border: `1px solid ${theme.border}`,
+                    color: theme.text,
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                  }}
+                >
+                  <option value="">Select your target role</option>
+                  <option value="Developer">Developer</option>
+                  <option value="Analyst">Analyst</option>
+                  <option value="Designer">Designer</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="General">General</option>
+                </select>
+              </div>
+
               {/* Primary analyze action shown only after a file is chosen. */}
               {file && (
                 <button
@@ -1119,13 +1176,15 @@ function App() {
                 <button
                   type="button"
                   onClick={handleDownload}
+                  disabled={downloadLoading}
                   style={{
                     border: 'none',
                     borderRadius: 20,
                     padding: '16px 18px',
                     background: `linear-gradient(135deg, ${themeMap.accent}, ${themeMap.mint})`,
                     color: '#fff',
-                    cursor: 'pointer',
+                    cursor: downloadLoading ? 'not-allowed' : 'pointer',
+                    opacity: downloadLoading ? 0.7 : 1,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1135,7 +1194,7 @@ function App() {
                   }}
                 >
                   <Download size={18} />
-                  <span>Download Resume</span>
+                  <span>{downloadLoading ? 'Preparing Download...' : 'Download Resume'}</span>
                 </button>
 
                 <button
@@ -1160,6 +1219,30 @@ function App() {
                   <span>Analyze Another</span>
                 </button>
               </div>
+
+              {/* Success feedback after the optimized resume download completes. */}
+              <AnimatePresence>
+                {downloadSuccess && (
+                  <MotionDiv
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: 18,
+                      background: 'rgba(0,200,150,0.12)',
+                      border: '1px solid rgba(0,200,150,0.24)',
+                      color: theme.text,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <CheckCircle size={16} color={themeMap.mint} />
+                    <span>Download complete. Your optimized resume has been saved.</span>
+                  </MotionDiv>
+                )}
+              </AnimatePresence>
 
               {/* Collapsed extracted text section for debugging and transparency. */}
               <details
