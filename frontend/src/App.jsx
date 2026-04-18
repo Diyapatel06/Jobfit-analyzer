@@ -4,237 +4,474 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useDropzone } from 'react-dropzone'
 import {
   AlertTriangle,
-  CheckCircle2,
+  Briefcase,
+  CheckCircle,
   Download,
   FileText,
-  LoaderCircle,
   Moon,
-  RefreshCcw,
-  Sparkles,
+  RotateCcw,
+  Shield,
   Sun,
-  UploadCloud,
+  Target,
+  TrendingUp,
+  Upload,
+  X,
+  Zap,
 } from 'lucide-react'
 
-const platforms = ['LinkedIn', 'Naukri', 'Internshala']
-const allSections = ['Email', 'Phone', 'Education', 'Experience', 'Skills', 'Projects']
-
-const scoreColors = {
-  resume: '#7c3aed',
-  ats: '#00c896',
-  jd: '#f59e0b',
+const themeMap = {
+  dark: {
+    bg: '#050508',
+    card: 'rgba(255,255,255,0.03)',
+    border: 'rgba(255,255,255,0.07)',
+    text: '#fff',
+    muted: '#666',
+  },
+  light: {
+    bg: '#f7f7fc',
+    card: '#fff',
+    border: 'rgba(0,0,0,0.08)',
+    text: '#111',
+    muted: '#999',
+  },
+  accent: '#7c3aed',
+  mint: '#00c896',
+  warning: '#f5a623',
+  danger: '#ff4d6d',
 }
 
-const getTheme = (dark) => ({
-  dark,
-  background: dark ? '#050508' : '#ffffff',
-  surface: dark ? 'rgba(13, 13, 19, 0.92)' : 'rgba(255, 255, 255, 0.92)',
-  surfaceStrong: dark ? '#0d0d13' : '#ffffff',
-  mutedSurface: dark ? 'rgba(124, 58, 237, 0.09)' : '#f8f5ff',
-  border: dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)',
-  text: dark ? '#f8fafc' : '#0f172a',
-  textSoft: dark ? '#cbd5e1' : '#475569',
-  accent: '#7c3aed',
-  accentSoft: dark ? 'rgba(124, 58, 237, 0.18)' : 'rgba(124, 58, 237, 0.1)',
-  mint: '#00c896',
-  mintSoft: dark ? 'rgba(0, 200, 150, 0.18)' : 'rgba(0, 200, 150, 0.12)',
-  warningSoft: dark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.14)',
-  dangerSoft: dark ? 'rgba(239, 68, 68, 0.16)' : 'rgba(254, 226, 226, 0.95)',
-  ringTrack: dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.09)',
-  shadow: dark ? '0 24px 80px rgba(2, 6, 23, 0.45)' : '0 24px 70px rgba(148, 163, 184, 0.22)',
-})
+const loadingMessages = [
+  'Reading your resume and extracting the content...',
+  'Scoring core sections and ATS compatibility...',
+  'Matching your resume against the job description...',
+  'Generating focused feedback to improve your chances...',
+]
 
-const parseFeedback = (feedback) => {
+const platforms = [
+  { key: 'linkedin', label: 'LinkedIn', emoji: '💼' },
+  { key: 'naukri', label: 'Naukri', emoji: '🔶' },
+  { key: 'internshala', label: 'Internshala', emoji: '🎓' },
+]
+
+const featurePills = [
+  { label: 'Resume Score', icon: TrendingUp },
+  { label: 'ATS Rating', icon: Shield },
+  { label: 'JD Match', icon: Target },
+  { label: 'Download', icon: Download },
+]
+
+const getActiveTheme = (dark) => (dark ? themeMap.dark : themeMap.light)
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
+
+const normalizeResumeScore = (score) => clamp(Math.round((Number(score) || 0) / 90 * 100), 0, 100)
+
+const splitFeedback = (feedback) => {
   if (!feedback) return []
 
-  const cleaned = feedback
-    .replace(/â€¢/g, '•')
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^[•*\-\d.)\s]+/, '').trim())
+  return feedback
+    .replace(/Ã¢â‚¬Â¢/g, '•')
+    .split(/(?:\r?\n|•)/)
+    .map((item) => item.replace(/^[\s\-*•]+/, '').trim())
     .filter(Boolean)
-
-  return cleaned.length ? cleaned : [feedback]
 }
 
-const buildAtsScore = (issues = []) => Math.max(100 - issues.length * 20, 0)
-
-const getMeterStatus = (score) => {
-  if (score >= 75) return 'Pass'
-  if (score >= 45) return 'Review'
-  return 'Reject'
+const getScoreColor = (score) => {
+  if (score > 75) return themeMap.mint
+  if (score >= 50) return themeMap.warning
+  return themeMap.danger
 }
 
-function AnimatedNumber({ value, color, theme }) {
-  const [displayValue, setDisplayValue] = useState(0)
+const getAtsLabel = (score) => {
+  if (score >= 80) return 'Pass'
+  if (score >= 60) return 'Partial'
+  return 'Risk'
+}
+
+// Animated counter hook for score labels.
+function useCounter(target) {
+  const [count, setCount] = useState(0)
 
   useEffect(() => {
-    let frameId
-    let startTime
-    const duration = 900
+    const safeTarget = Number.isFinite(target) ? Math.max(0, Math.round(target)) : 0
 
-    const animate = (timestamp) => {
-      if (!startTime) startTime = timestamp
-      const progress = Math.min((timestamp - startTime) / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      setDisplayValue(Math.round(value * eased))
-      if (progress < 1) frameId = window.requestAnimationFrame(animate)
+    if (safeTarget === 0) {
+      const resetTimer = window.setTimeout(() => setCount(0), 0)
+      return () => window.clearTimeout(resetTimer)
     }
 
-    frameId = window.requestAnimationFrame(animate)
-    return () => window.cancelAnimationFrame(frameId)
-  }, [value])
+    let current = 0
+    const steps = 36
+    const increment = Math.max(1, Math.ceil(safeTarget / steps))
+    const timer = window.setInterval(() => {
+      current += increment
+
+      if (current >= safeTarget) {
+        current = safeTarget
+        window.clearInterval(timer)
+      }
+
+      setCount(current)
+    }, 24)
+
+    return () => window.clearInterval(timer)
+  }, [target])
+
+  return count
+}
+
+// Small status pill for present and missing resume sections.
+function Pill({ label, present, dark }) {
+  const theme = getActiveTheme(dark)
 
   return (
-    <motion.span
-      key={value}
-      initial={{ scale: 0.8, opacity: 0.4 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      style={{ color, fontSize: '1.9rem', fontWeight: 800, lineHeight: 1 }}
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 14px',
+        borderRadius: 999,
+        background: present ? 'rgba(0,200,150,0.12)' : 'rgba(255,77,109,0.12)',
+        border: `1px solid ${present ? 'rgba(0,200,150,0.3)' : 'rgba(255,77,109,0.26)'}`,
+        color: theme.text,
+        fontSize: 13,
+        fontWeight: 600,
+      }}
     >
-      {displayValue}
-      <span style={{ color: theme.textSoft, fontSize: '0.95rem', fontWeight: 600 }}>/100</span>
-    </motion.span>
+      <span
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          background: present ? themeMap.mint : 'transparent',
+          border: `2px solid ${present ? themeMap.mint : themeMap.danger}`,
+          flexShrink: 0,
+        }}
+      />
+      <span>{label}</span>
+    </div>
   )
 }
 
-function ScoreRing({ label, value, color, theme }) {
-  const safeValue = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
-  const radius = 52
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference - (safeValue / 100) * circumference
+// Animated theme toggle with a sliding spring knob.
+function ThemeToggle({ dark, setDark }) {
+  const theme = getActiveTheme(dark)
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45 }}
+    <button
+      type="button"
+      onClick={() => setDark((value) => !value)}
+      aria-label="Toggle theme"
       style={{
-        background: theme.surface,
+        width: 76,
+        height: 40,
+        padding: 4,
+        borderRadius: 999,
         border: `1px solid ${theme.border}`,
-        borderRadius: '1.5rem',
-        padding: '1.35rem',
-        boxShadow: theme.shadow,
-        backdropFilter: 'blur(14px)',
+        background: dark ? 'rgba(255,255,255,0.04)' : '#ececf5',
+        position: 'relative',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <p style={{ margin: 0, color: theme.text, fontWeight: 700 }}>{label}</p>
-        <Sparkles size={16} color={color} />
-      </div>
+      <Sun size={15} color={dark ? theme.muted : themeMap.warning} style={{ marginLeft: 8, zIndex: 1 }} />
+      <Moon size={15} color={dark ? theme.text : theme.muted} style={{ marginRight: 8, zIndex: 1 }} />
+      <motion.div
+        layout
+        transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: '50%',
+          background: `linear-gradient(135deg, ${themeMap.accent}, ${themeMap.mint})`,
+          position: 'absolute',
+          top: 4,
+          left: dark ? 42 : 4,
+          boxShadow: '0 10px 30px rgba(124,58,237,0.35)',
+        }}
+      />
+    </button>
+  )
+}
 
-      <div style={{ display: 'grid', placeItems: 'center', position: 'relative' }}>
-        <svg width="140" height="140" viewBox="0 0 140 140">
-          <circle cx="70" cy="70" r={radius} fill="none" stroke={theme.ringTrack} strokeWidth="12" />
-          <motion.circle
-            cx="70"
-            cy="70"
+// Circular score widget with animated SVG stroke and counter text.
+function ScoreRing({ score, max = 100, dark, label }) {
+  const theme = getActiveTheme(dark)
+  const safeScore = clamp(Math.round(Number(score) || 0), 0, max)
+  const progress = safeScore / max
+  const radius = 54
+  const circumference = 2 * Math.PI * radius
+  const scoreColor = getScoreColor(safeScore)
+  const counter = useCounter(safeScore)
+
+  return (
+    <div
+      style={{
+        background: theme.card,
+        border: `1px solid ${theme.border}`,
+        borderRadius: 24,
+        padding: 24,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 16,
+        backdropFilter: 'blur(18px)',
+      }}
+    >
+      <div style={{ position: 'relative', width: 150, height: 150 }}>
+        <svg width="150" height="150" viewBox="0 0 150 150">
+          <circle
+            cx="75"
+            cy="75"
             r={radius}
             fill="none"
-            stroke={color}
+            stroke={dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}
+            strokeWidth="12"
+          />
+          <motion.circle
+            cx="75"
+            cy="75"
+            r={radius}
+            fill="none"
+            stroke={scoreColor}
             strokeWidth="12"
             strokeLinecap="round"
-            transform="rotate(-90 70 70)"
-            initial={{ strokeDashoffset: circumference }}
-            animate={{ strokeDashoffset: offset }}
-            transition={{ duration: 1.1, ease: 'easeOut' }}
             strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: circumference - circumference * progress }}
+            transition={{ duration: 1.1, ease: 'easeOut' }}
+            transform="rotate(-90 75 75)"
           />
         </svg>
-        <div style={{ position: 'absolute', display: 'grid', placeItems: 'center' }}>
-          <AnimatedNumber value={safeValue} color={color} theme={theme} />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ color: theme.text, fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{counter}</div>
+          <div style={{ color: theme.muted, fontSize: 12, fontWeight: 600 }}>
+            / {max}
+          </div>
         </div>
       </div>
-    </motion.div>
+      <div style={{ color: theme.text, fontSize: 16, fontWeight: 700, textAlign: 'center' }}>{label}</div>
+    </div>
+  )
+}
+
+// Horizontal ATS meter with animated fill and clear scoring zones.
+function ATSMeter({ score, dark }) {
+  const theme = getActiveTheme(dark)
+  const safeScore = clamp(Math.round(Number(score) || 0), 0, 100)
+  const label = getAtsLabel(safeScore)
+  const zoneCards = [
+    { title: 'Pass', range: '80-100', color: themeMap.mint, bg: 'rgba(0,200,150,0.12)' },
+    { title: 'Review', range: '60-79', color: themeMap.warning, bg: 'rgba(245,166,35,0.12)' },
+    { title: 'Reject', range: '0-59', color: themeMap.danger, bg: 'rgba(255,77,109,0.12)' },
+  ]
+
+  return (
+    <div
+      style={{
+        background: theme.card,
+        border: `1px solid ${theme.border}`,
+        borderRadius: 24,
+        padding: 24,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 18,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>ATS Compatibility</div>
+          <div style={{ color: theme.muted, fontSize: 14 }}>Automated parser confidence for your resume format</div>
+        </div>
+        <div
+          style={{
+            padding: '8px 14px',
+            borderRadius: 999,
+            background:
+              label === 'Pass'
+                ? 'rgba(0,200,150,0.12)'
+                : label === 'Partial'
+                  ? 'rgba(245,166,35,0.12)'
+                  : 'rgba(255,77,109,0.12)',
+            border: `1px solid ${
+              label === 'Pass'
+                ? 'rgba(0,200,150,0.28)'
+                : label === 'Partial'
+                  ? 'rgba(245,166,35,0.28)'
+                  : 'rgba(255,77,109,0.26)'
+            }`,
+            color: theme.text,
+            fontWeight: 700,
+            fontSize: 13,
+          }}
+        >
+          {label}
+        </div>
+      </div>
+
+      <div
+        style={{
+          width: '100%',
+          height: 14,
+          borderRadius: 999,
+          overflow: 'hidden',
+          background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+          position: 'relative',
+        }}
+      >
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${safeScore}%` }}
+          transition={{ duration: 1, ease: 'easeOut' }}
+          style={{
+            height: '100%',
+            borderRadius: 999,
+            background: `linear-gradient(90deg, ${themeMap.danger} 0%, ${themeMap.warning} 55%, ${themeMap.mint} 100%)`,
+          }}
+        />
+      </div>
+
+      <div style={{ color: theme.text, fontSize: 14, fontWeight: 700 }}>{safeScore}/100</div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: 12,
+        }}
+      >
+        {zoneCards.map((zone) => (
+          <div
+            key={zone.title}
+            style={{
+              borderRadius: 18,
+              padding: 14,
+              background: zone.bg,
+              border: `1px solid ${zone.color}33`,
+            }}
+          >
+            <div style={{ color: zone.color, fontSize: 14, fontWeight: 800 }}>{zone.title}</div>
+            <div style={{ color: theme.text, fontSize: 15, fontWeight: 700, marginTop: 6 }}>{zone.range}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
 function App() {
+  const MotionSection = motion.section
   const MotionDiv = motion.div
 
-  // Theme, upload, and analysis state.
+  // Core app state required by the project.
   const [file, setFile] = useState(null)
+  const [jdText, setJdText] = useState('')
+  const [platform, setPlatform] = useState(null)
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState(null)
+  const [error, setError] = useState(null)
   const [dark, setDark] = useState(true)
-  const [jdText, setJdText] = useState('')
-  const [platform, setPlatform] = useState('LinkedIn')
 
-  const theme = useMemo(() => getTheme(dark), [dark])
+  // Supporting UI state for responsive polish and loading feedback.
+  const [loadingIndex, setLoadingIndex] = useState(0)
 
-  // Derived metrics used across the results area.
-  const atsScore = useMemo(() => buildAtsScore(results?.ats_issues ?? []), [results])
-  const jdScore = results?.jd_match?.match_score
-  const feedbackPoints = useMemo(() => parseFeedback(results?.ai_feedback), [results])
-  const sectionStatus = useMemo(
-    () =>
-      allSections.map((section) => ({
-        label: section,
-        found: results?.score_data?.found_sections?.includes(section) ?? false,
-      })),
-    [results],
-  )
+  const theme = getActiveTheme(dark)
 
-  // Keep the page colors aligned with the active theme.
+  // Keep the browser chrome aligned with the active theme.
   useEffect(() => {
-    document.body.style.background = theme.background
+    document.body.style.margin = '0'
+    document.body.style.background = theme.bg
     document.body.style.color = theme.text
-    document.body.style.transition = 'background 250ms ease, color 250ms ease'
-  }, [theme])
+    document.body.style.fontFamily = '"Segoe UI", "Trebuchet MS", sans-serif'
+  }, [theme.bg, theme.text])
 
-  // Resume dropzone configuration.
-  const onDrop = (acceptedFiles) => {
-    if (acceptedFiles?.length) setFile(acceptedFiles[0])
-  }
+  // Rotate loading copy while the analysis request is in flight.
+  useEffect(() => {
+    if (!loading) return undefined
 
-  const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
-    onDrop,
+    const timer = window.setInterval(() => {
+      setLoadingIndex((current) => (current + 1) % loadingMessages.length)
+    }, 1600)
+
+    return () => window.clearInterval(timer)
+  }, [loading])
+
+  // Dropzone setup for PDF and DOCX resume uploads.
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     multiple: false,
     accept: {
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
     },
+    onDrop: (acceptedFiles, rejectedFiles) => {
+      if (rejectedFiles?.length) {
+        setError('Only PDF and DOCX files are supported.')
+        return
+      }
+
+      const nextFile = acceptedFiles?.[0] || null
+      setError(null)
+      setFile(nextFile)
+    },
   })
 
-  // Submit the file, JD, and selected platform to the backend.
+  // Derived scores for the results dashboard.
+  const resumeScore = useMemo(() => normalizeResumeScore(results?.score_data?.total_score), [results])
+  const atsScore = useMemo(() => clamp(resumeScore - (results?.ats_issues?.length || 0) * 8, 0, 100), [results, resumeScore])
+  const jdScore = useMemo(() => {
+    if (results?.jd_match?.match_score === null || results?.jd_match?.match_score === undefined) return null
+    return clamp(Math.round(results.jd_match.match_score), 0, 100)
+  }, [results])
+  const feedbackPoints = useMemo(() => splitFeedback(results?.ai_feedback), [results])
+
+  // Submit the resume for backend analysis.
   const handleAnalyze = async () => {
     if (!file) return
 
     const formData = new FormData()
     formData.append('file', file)
     formData.append('jd_text', jdText)
-    formData.append('platform', platform.toLowerCase())
+    formData.append('platform', platform || '')
 
     try {
+      setLoadingIndex(0)
       setLoading(true)
+      setError(null)
+      setResults(null)
+
       const response = await axios.post('http://localhost:8000/upload', formData)
       setResults(response.data)
-    } catch (error) {
-      const message =
-        error?.response?.data?.detail ||
-        error?.message ||
-        'Unable to analyze the resume right now.'
-
-      setResults({
-        score_data: { total_score: 0, found_sections: [], missing_sections: allSections },
-        ats_issues: [typeof message === 'string' ? message : 'Unexpected server response'],
-        jd_match: { match_score: jdText.trim() ? 0 : null, missing_keywords: [], jd_keywords: [] },
-        ai_feedback: 'Analysis could not be completed. Please check that the backend is running on http://localhost:8000.',
-      })
+    } catch (requestError) {
+      setError(requestError?.response?.data?.detail || requestError?.message || 'Failed to analyze the resume.')
     } finally {
       setLoading(false)
     }
   }
 
-  // Download the optimized resume returned by the backend.
+  // Trigger optimized resume download from the backend.
   const handleDownload = async () => {
     if (!file) return
 
     const formData = new FormData()
     formData.append('file', file)
     formData.append('jd_text', jdText)
-    formData.append('platform', platform.toLowerCase())
+    formData.append('platform', platform || '')
 
     try {
+      setError(null)
       const response = await axios.post('http://localhost:8000/download', formData, {
         responseType: 'blob',
       })
@@ -243,800 +480,721 @@ function App() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `optimized_resume_${platform.toLowerCase()}.txt`
+      link.download = `optimized_resume_${platform || 'general'}.txt`
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
-    } catch {
-      window.alert('Download failed. Please make sure the backend is available.')
+    } catch (requestError) {
+      setError(requestError?.message || 'Failed to download the optimized resume.')
     }
   }
 
-  // Reset the experience to analyze another resume.
+  // Reset the analyzer so another resume can be processed.
   const handleReset = () => {
     setFile(null)
+    setJdText('')
+    setPlatform(null)
     setLoading(false)
     setResults(null)
-    setJdText('')
-    setPlatform('LinkedIn')
+    setError(null)
   }
 
-  const meterStatus = getMeterStatus(atsScore)
-
   return (
-    <>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: theme.bg,
+        color: theme.text,
+        transition: 'background 0.25s ease, color 0.25s ease',
+      }}
+    >
+      {/* Global responsive styles kept local to this component. */}
       <style>{`
         * { box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
-        body {
-          margin: 0;
-          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-        button, input, textarea { font: inherit; }
-        .app-shell {
-          min-height: 100vh;
-          position: relative;
-          overflow: hidden;
-        }
-        .app-shell::before,
-        .app-shell::after {
-          content: "";
-          position: absolute;
-          border-radius: 999px;
-          filter: blur(90px);
-          z-index: 0;
-          pointer-events: none;
-        }
-        .app-shell::before {
-          width: 18rem;
-          height: 18rem;
-          top: 5rem;
-          left: -4rem;
-          background: rgba(124, 58, 237, 0.25);
-        }
-        .app-shell::after {
-          width: 20rem;
-          height: 20rem;
-          top: 18rem;
-          right: -6rem;
-          background: rgba(0, 200, 150, 0.18);
-        }
-        .content-wrap {
-          width: min(1160px, calc(100% - 2rem));
+        .jobfit-shell {
+          width: min(1180px, calc(100% - 24px));
           margin: 0 auto;
-          position: relative;
-          z-index: 1;
         }
-        .toggle-button:hover { transform: translateY(-1px); }
-        .ghost-input::file-selector-button { display: none; }
-        .gradient-text {
-          background: linear-gradient(120deg, #7c3aed 0%, #00c896 45%, #f8fafc 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
+        .jobfit-results-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 18px;
         }
-        .light-gradient-text {
-          background: linear-gradient(120deg, #7c3aed 0%, #00c896 50%, #111827 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
+        .jobfit-main-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
         }
-        @media (max-width: 768px) {
-          .content-wrap { width: min(100% - 1rem, 1160px); }
+        .jobfit-actions {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+        }
+        @media (max-width: 900px) {
+          .jobfit-results-grid,
+          .jobfit-main-grid,
+          .jobfit-actions {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
 
-      <div className="app-shell" style={{ background: theme.background }}>
-        {/* Sticky navbar with logo and theme toggle. */}
-        <motion.nav
-          initial={{ y: -30, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5 }}
+      {/* Sticky navbar with brand and theme switcher. */}
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 30,
+          backdropFilter: 'blur(18px)',
+          background: dark ? 'rgba(5,5,8,0.74)' : 'rgba(247,247,252,0.78)',
+          borderBottom: `1px solid ${theme.border}`,
+        }}
+      >
+        <div
+          className="jobfit-shell"
           style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 20,
-            backdropFilter: 'blur(18px)',
-            borderBottom: `1px solid ${theme.border}`,
-            background: dark ? 'rgba(5, 5, 8, 0.74)' : 'rgba(255, 255, 255, 0.76)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            padding: '16px 0',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                display: 'grid',
+                placeItems: 'center',
+                background: `linear-gradient(135deg, ${themeMap.accent}, ${themeMap.mint})`,
+                boxShadow: '0 12px 28px rgba(124,58,237,0.28)',
+              }}
+            >
+              <Zap size={20} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: theme.text }}>JobFit Analyzer</div>
+              <div style={{ fontSize: 13, color: theme.muted }}>Resume intelligence for faster applications</div>
+            </div>
+          </div>
+          <ThemeToggle dark={dark} setDark={setDark} />
+        </div>
+      </div>
+
+      <div className="jobfit-shell" style={{ padding: '28px 0 48px' }}>
+        {/* Hero section with headline and feature highlights. */}
+        <MotionSection
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55 }}
+          style={{
+            padding: '26px 0 24px',
+            textAlign: 'center',
           }}
         >
           <div
-            className="content-wrap"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '1rem 0',
-              gap: '1rem',
+              width: 'min(880px, 100%)',
+              margin: '0 auto',
+              padding: '28px 22px',
+              borderRadius: 28,
+              background: dark
+                ? 'radial-gradient(circle at top, rgba(124,58,237,0.2), rgba(0,200,150,0.05) 45%, rgba(255,255,255,0.02) 100%)'
+                : 'radial-gradient(circle at top, rgba(124,58,237,0.14), rgba(0,200,150,0.05) 45%, #ffffff 100%)',
+              border: `1px solid ${theme.border}`,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-              <MotionDiv
-                whileHover={{ rotate: -6, scale: 1.04 }}
-                style={{
-                  width: '2.9rem',
-                  height: '2.9rem',
-                  borderRadius: '1rem',
-                  display: 'grid',
-                  placeItems: 'center',
-                  background: `linear-gradient(135deg, ${theme.accent}, ${theme.mint})`,
-                  color: '#fff',
-                  boxShadow: '0 16px 32px rgba(124, 58, 237, 0.3)',
-                }}
-              >
-                <FileText size={20} />
-              </MotionDiv>
-              <div>
-                <p style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: theme.text }}>JobFit Analyzer</p>
-                <p style={{ margin: 0, color: theme.textSoft, fontSize: '0.88rem' }}>
-                  Resume scoring with ATS and JD insights
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              aria-label="Toggle theme"
-              className="toggle-button"
-              onClick={() => setDark((value) => !value)}
+            <div
               style={{
-                border: `1px solid ${theme.border}`,
-                background: theme.surfaceStrong,
-                borderRadius: '999px',
-                padding: '0.35rem',
-                width: '4.9rem',
-                cursor: 'pointer',
-                position: 'relative',
-                transition: 'transform 180ms ease',
-                boxShadow: theme.shadow,
-              }}
-            >
-              <div
-                style={{
-                  height: '2.15rem',
-                  borderRadius: '999px',
-                  background: dark
-                    ? 'linear-gradient(135deg, rgba(124,58,237,0.32), rgba(0,200,150,0.22))'
-                    : 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(0,200,150,0.12))',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                <motion.div
-                  layout
-                  transition={{ type: 'spring', stiffness: 500, damping: 28 }}
-                  style={{
-                    width: '1.8rem',
-                    height: '1.8rem',
-                    borderRadius: '999px',
-                    background: '#fff',
-                    position: 'absolute',
-                    top: '0.175rem',
-                    left: dark ? '2.8rem' : '0.18rem',
-                    display: 'grid',
-                    placeItems: 'center',
-                    boxShadow: '0 10px 20px rgba(15, 23, 42, 0.18)',
-                  }}
-                >
-                  {dark ? <Moon size={14} color={theme.accent} /> : <Sun size={14} color={theme.mint} />}
-                </motion.div>
-              </div>
-            </button>
-          </div>
-        </motion.nav>
-
-        <main className="content-wrap" style={{ paddingTop: '2.2rem', paddingBottom: '4rem' }}>
-          {/* Hero section with gradient headline and intro copy. */}
-          <motion.section
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55 }}
-            style={{
-              textAlign: 'center',
-              padding: '2rem 0 2.5rem',
-            }}
-          >
-            <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.08, duration: 0.45 }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.55rem 0.95rem',
-                borderRadius: '999px',
-                background: theme.accentSoft,
-                color: theme.text,
-                border: `1px solid ${theme.border}`,
-                marginBottom: '1.4rem',
-              }}
-            >
-              <Sparkles size={16} color={theme.accent} />
-              <span style={{ fontSize: '0.92rem', fontWeight: 700 }}>Smarter resume checks for every platform</span>
-            </motion.div>
-
-            <h1
-              className={dark ? 'gradient-text' : 'light-gradient-text'}
-              style={{
-                margin: '0 auto',
-                maxWidth: '12ch',
-                fontSize: 'clamp(2.6rem, 7vw, 5.2rem)',
-                lineHeight: 0.95,
-                letterSpacing: '-0.05em',
+                fontSize: 'clamp(34px, 7vw, 68px)',
                 fontWeight: 900,
+                lineHeight: 1,
+                letterSpacing: '-0.05em',
+                background: `linear-gradient(135deg, ${themeMap.accent}, ${themeMap.mint})`,
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
               }}
             >
               Upload Once. Get Hired Faster.
-            </h1>
-
-            <p
-              style={{
-                margin: '1.25rem auto 0',
-                maxWidth: '44rem',
-                color: theme.textSoft,
-                fontSize: 'clamp(1rem, 2vw, 1.1rem)',
-                lineHeight: 1.75,
-              }}
-            >
-              Drop in your resume, add a job description if you want deeper matching, choose where you&apos;re applying,
-              and get a polished breakdown of score, ATS health, keywords, and AI suggestions.
-            </p>
-          </motion.section>
-
-          {/* Main upload and input area. */}
-          <motion.section
-            initial={{ opacity: 0, y: 28 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.55 }}
-            style={{
-              display: 'grid',
-              gap: '1.25rem',
-              background: theme.surface,
-              border: `1px solid ${theme.border}`,
-              borderRadius: '1.75rem',
-              padding: 'clamp(1rem, 3vw, 1.6rem)',
-              boxShadow: theme.shadow,
-              backdropFilter: 'blur(16px)',
-            }}
-          >
-            {/* Drag and drop resume upload box. */}
+            </div>
             <div
-              {...getRootProps()}
               style={{
-                border: `1.5px dashed ${isDragActive ? theme.mint : theme.border}`,
-                borderRadius: '1.4rem',
-                padding: 'clamp(1.4rem, 4vw, 2.2rem)',
-                background: isDragActive ? theme.mintSoft : theme.mutedSurface,
-                transition: 'all 180ms ease',
-                cursor: 'pointer',
+                marginTop: 16,
+                fontSize: 16,
+                lineHeight: 1.8,
+                color: theme.muted,
+                maxWidth: 720,
+                marginInline: 'auto',
               }}
             >
-              <input {...getInputProps()} className="ghost-input" />
+              Drop in your resume, optionally add a job description, and get a polished analysis covering resume quality,
+              ATS compatibility, keyword gaps, platform targeting, and instant next steps.
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: 12,
+                flexWrap: 'wrap',
+                marginTop: 22,
+              }}
+            >
+              {featurePills.map((item) => {
+                const Icon = item.icon
+                return (
+                  <div
+                    key={item.label}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '10px 14px',
+                      borderRadius: 999,
+                      background: theme.card,
+                      border: `1px solid ${theme.border}`,
+                      color: theme.text,
+                      fontSize: 13,
+                      fontWeight: 700,
+                    }}
+                  >
+                    <Icon size={14} color={themeMap.accent} />
+                    <span>{item.label}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </MotionSection>
+
+        {/* Error banner for API or file validation problems. */}
+        <AnimatePresence>
+          {error && (
+            <MotionDiv
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              style={{
+                marginBottom: 18,
+                padding: '14px 16px',
+                borderRadius: 18,
+                background: 'rgba(255,77,109,0.12)',
+                border: `1px solid rgba(255,77,109,0.25)`,
+                color: theme.text,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <X size={16} color={themeMap.danger} />
+              <span>{error}</span>
+            </MotionDiv>
+          )}
+        </AnimatePresence>
+
+        {/* Upload section shown until results are available. */}
+        <AnimatePresence mode="wait">
+          {!results && !loading && (
+            <motion.section
+              key="upload-section"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.45 }}
+              style={{
+                background: theme.card,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 28,
+                padding: 22,
+                display: 'grid',
+                gap: 18,
+                backdropFilter: 'blur(18px)',
+              }}
+            >
+              {/* Drag-and-drop upload box for the resume file. */}
+              <div
+                {...getRootProps()}
+                style={{
+                  borderRadius: 24,
+                  border: `1.5px dashed ${isDragActive ? themeMap.accent : theme.border}`,
+                  background: isDragActive
+                    ? dark
+                      ? 'rgba(124,58,237,0.12)'
+                      : 'rgba(124,58,237,0.08)'
+                    : dark
+                      ? 'rgba(255,255,255,0.02)'
+                      : '#fbfbff',
+                  padding: '30px 20px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  boxShadow: isDragActive ? '0 0 0 4px rgba(124,58,237,0.14)' : 'none',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <input {...getInputProps()} />
+                <div
+                  style={{
+                    width: 62,
+                    height: 62,
+                    margin: '0 auto 14px',
+                    borderRadius: 20,
+                    display: 'grid',
+                    placeItems: 'center',
+                    background: `linear-gradient(135deg, ${themeMap.accent}, ${themeMap.mint})`,
+                  }}
+                >
+                  <Upload size={26} color="#fff" />
+                </div>
+                <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>
+                  {isDragActive ? 'Drop your resume here' : 'Upload your resume'}
+                </div>
+                <div style={{ marginTop: 8, color: theme.muted, fontSize: 14 }}>PDF and DOCX files are supported</div>
+                {file && (
+                  <div
+                    style={{
+                      marginTop: 16,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '10px 14px',
+                      borderRadius: 999,
+                      background: 'rgba(0,200,150,0.12)',
+                      border: `1px solid rgba(0,200,150,0.28)`,
+                      color: theme.text,
+                      fontSize: 14,
+                      fontWeight: 700,
+                    }}
+                  >
+                    <CheckCircle size={16} color={themeMap.mint} />
+                    <span>{file.name}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Optional job description textarea for JD matching. */}
+              <div>
+                <label
+                  htmlFor="jd-text"
+                  style={{
+                    display: 'block',
+                    marginBottom: 10,
+                    color: theme.muted,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: '0.12em',
+                  }}
+                >
+                  JOB DESCRIPTION OPTIONAL
+                </label>
+                <textarea
+                  id="jd-text"
+                  value={jdText}
+                  onChange={(event) => setJdText(event.target.value)}
+                  placeholder="Paste the role details here for keyword and JD match scoring..."
+                  style={{
+                    width: '100%',
+                    minHeight: 150,
+                    resize: 'vertical',
+                    borderRadius: 20,
+                    border: `1px solid ${theme.border}`,
+                    background: dark ? 'rgba(255,255,255,0.02)' : '#fcfcff',
+                    color: theme.text,
+                    padding: 16,
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Platform selection buttons with selectable toggle behavior. */}
+              <div>
+                <div style={{ color: theme.text, fontSize: 15, fontWeight: 800, marginBottom: 10 }}>Choose platform</div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                    gap: 12,
+                  }}
+                >
+                  {platforms.map((item) => {
+                    const active = platform === item.key
+
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setPlatform((current) => (current === item.key ? null : item.key))}
+                        style={{
+                          borderRadius: 18,
+                          border: `1px solid ${active ? themeMap.accent : theme.border}`,
+                          background: active ? 'rgba(124,58,237,0.14)' : theme.card,
+                          color: theme.text,
+                          padding: '14px 16px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                        }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <Briefcase size={16} color={active ? themeMap.accent : theme.muted} />
+                          <span style={{ fontWeight: 700 }}>{item.emoji} {item.label}</span>
+                        </span>
+                        {active && <CheckCircle size={16} color={themeMap.mint} />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Primary analyze action shown only after a file is chosen. */}
+              {file && (
+                <button
+                  type="button"
+                  onClick={handleAnalyze}
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    borderRadius: 20,
+                    padding: '16px 18px',
+                    background: `linear-gradient(135deg, ${themeMap.accent}, #9f67ff 45%, ${themeMap.mint})`,
+                    color: '#fff',
+                    fontSize: 15,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '0 20px 40px rgba(124,58,237,0.28)',
+                  }}
+                >
+                  Analyze Resume
+                </button>
+              )}
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* Loading state with animated rings and rotating status messages. */}
+        <AnimatePresence mode="wait">
+          {loading && (
+            <motion.section
+              key="loading-state"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              style={{
+                marginTop: 8,
+                background: theme.card,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 28,
+                padding: '40px 24px',
+                textAlign: 'center',
+              }}
+            >
               <div
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  gap: '0.85rem',
+                  width: 110,
+                  height: 110,
+                  margin: '0 auto 18px',
+                  position: 'relative',
                 }}
               >
                 <motion.div
-                  animate={{ y: isDragActive ? -4 : 0 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.3, repeat: Infinity, ease: 'linear' }}
                   style={{
-                    width: '4rem',
-                    height: '4rem',
-                    borderRadius: '1.2rem',
-                    display: 'grid',
-                    placeItems: 'center',
-                    background: `linear-gradient(135deg, ${theme.accent}, ${theme.mint})`,
-                    color: '#fff',
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '50%',
+                    border: `4px solid transparent`,
+                    borderTopColor: themeMap.accent,
+                    borderRightColor: themeMap.accent,
                   }}
-                >
-                  <UploadCloud size={24} />
-                </motion.div>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 800, color: theme.text, fontSize: '1.05rem' }}>
-                    {file ? file.name : isDragActive ? 'Drop your resume here' : 'Drag and drop your resume'}
-                  </p>
-                  <p style={{ margin: '0.45rem 0 0', color: theme.textSoft }}>
-                    Accepts PDF and DOCX only. Tap or click the box to browse.
-                  </p>
-                </div>
+                />
+                <motion.div
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 1.1, repeat: Infinity, ease: 'linear' }}
+                  style={{
+                    position: 'absolute',
+                    inset: 14,
+                    borderRadius: '50%',
+                    border: `4px solid transparent`,
+                    borderBottomColor: themeMap.mint,
+                    borderLeftColor: themeMap.mint,
+                  }}
+                />
               </div>
-            </div>
+              <div style={{ color: theme.text, fontSize: 22, fontWeight: 800 }}>Analyzing your resume</div>
+              <div style={{ marginTop: 10, color: theme.muted, fontSize: 15 }}>{loadingMessages[loadingIndex]}</div>
+            </motion.section>
+          )}
+        </AnimatePresence>
 
-            {fileRejections.length > 0 && (
-              <div
-                style={{
-                  borderRadius: '1rem',
-                  padding: '0.9rem 1rem',
-                  background: theme.dangerSoft,
-                  color: theme.text,
-                  border: '1px solid rgba(239, 68, 68, 0.28)',
-                }}
-              >
-                Only `.pdf` and `.docx` files are supported.
-              </div>
-            )}
-
-            {/* Job description text area. */}
-            <div style={{ display: 'grid', gap: '0.65rem' }}>
-              <label htmlFor="jd-text" style={{ color: theme.text, fontWeight: 700 }}>
-                Job Description
-              </label>
-              <textarea
-                id="jd-text"
-                rows={7}
-                value={jdText}
-                onChange={(event) => setJdText(event.target.value)}
-                placeholder="Paste the job description here for keyword matching and JD score..."
-                style={{
-                  width: '100%',
-                  resize: 'vertical',
-                  borderRadius: '1.2rem',
-                  border: `1px solid ${theme.border}`,
-                  background: theme.surfaceStrong,
-                  color: theme.text,
-                  padding: '1rem 1.1rem',
-                  outline: 'none',
-                  lineHeight: 1.7,
-                }}
-              />
-            </div>
-
-            {/* Platform selector buttons. */}
-            <div style={{ display: 'grid', gap: '0.75rem' }}>
-              <p style={{ margin: 0, color: theme.text, fontWeight: 700 }}>Select Platform</p>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                  gap: '0.75rem',
-                }}
-              >
-                {platforms.map((item) => {
-                  const active = platform === item
-                  return (
-                    <motion.button
-                      key={item}
-                      whileHover={{ y: -2 }}
-                      whileTap={{ scale: 0.98 }}
-                      type="button"
-                      onClick={() => setPlatform(item)}
-                      style={{
-                        borderRadius: '1rem',
-                        border: `1px solid ${active ? theme.accent : theme.border}`,
-                        background: active ? theme.accentSoft : theme.surfaceStrong,
-                        color: theme.text,
-                        fontWeight: 800,
-                        padding: '0.95rem 1rem',
-                        cursor: 'pointer',
-                        boxShadow: active ? '0 14px 30px rgba(124, 58, 237, 0.18)' : 'none',
-                      }}
-                    >
-                      {item}
-                    </motion.button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Analyze action button. */}
-            <motion.button
-              whileHover={{ y: -2, scale: file && !loading ? 1.01 : 1 }}
-              whileTap={{ scale: file && !loading ? 0.99 : 1 }}
-              type="button"
-              disabled={!file || loading}
-              onClick={handleAnalyze}
-              style={{
-                border: 'none',
-                borderRadius: '1.15rem',
-                padding: '1rem 1.15rem',
-                background: !file || loading
-                  ? theme.ringTrack
-                  : `linear-gradient(135deg, ${theme.accent}, ${theme.mint})`,
-                color: !file || loading ? theme.textSoft : '#ffffff',
-                fontWeight: 800,
-                cursor: !file || loading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.7rem',
-              }}
+        {/* Results dashboard with animated scorecards and detailed analysis. */}
+        <AnimatePresence mode="wait">
+          {results && !loading && (
+            <motion.section
+              key="results-section"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.45 }}
+              style={{ display: 'grid', gap: 18 }}
             >
-              {loading ? <LoaderCircle size={18} /> : <Sparkles size={18} />}
-              {loading ? 'Analyzing Resume...' : 'Analyze Resume'}
-            </motion.button>
-          </motion.section>
+              {/* Responsive score ring grid for the top metrics. */}
+              <div className="jobfit-results-grid">
+                <ScoreRing score={resumeScore} max={100} dark={dark} label="Resume Score" />
+                <ScoreRing score={atsScore} max={100} dark={dark} label="ATS Score" />
+                {jdScore !== null && <ScoreRing score={jdScore} max={100} dark={dark} label="JD Match" />}
+              </div>
 
-          {/* Results section with animated cards, chips, and actions. */}
-          <AnimatePresence mode="wait">
-            {results && (
-              <motion.section
-                key="results"
-                initial={{ opacity: 0, y: 36 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 24 }}
-                transition={{ duration: 0.5 }}
-                style={{ marginTop: '1.6rem', display: 'grid', gap: '1.2rem' }}
-              >
+              {/* Mid-page metrics split between ATS meter and section pills. */}
+              <div className="jobfit-main-grid">
+                <ATSMeter score={atsScore} dark={dark} />
+
                 <div
                   style={{
+                    background: theme.card,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 24,
+                    padding: 24,
                     display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '1rem',
-                    flexWrap: 'wrap',
+                    flexDirection: 'column',
+                    gap: 16,
                   }}
                 >
                   <div>
-                    <h2 style={{ margin: 0, color: theme.text, fontSize: 'clamp(1.6rem, 4vw, 2.2rem)' }}>
-                      Analysis Results
-                    </h2>
-                    <p style={{ margin: '0.4rem 0 0', color: theme.textSoft }}>
-                      Built for {platform} with ATS checks, keyword gaps, and rewrite guidance.
-                    </p>
+                    <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>Section Analysis</div>
+                    <div style={{ color: theme.muted, fontSize: 14, marginTop: 4 }}>
+                      Green means present. Red marks sections that should be added or strengthened.
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {(results?.score_data?.found_sections || []).map((section) => (
+                      <Pill key={`found-${section}`} label={section} present dark={dark} />
+                    ))}
+                    {(results?.score_data?.missing_sections || []).map((section) => (
+                      <Pill key={`missing-${section}`} label={section} present={false} dark={dark} />
+                    ))}
                   </div>
                 </div>
+              </div>
 
+              {/* Missing JD keywords rendered as warning chips when JD data exists. */}
+              {jdScore !== null && (
                 <div
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(auto-fit, minmax(${jdScore !== null ? '220px' : '260px'}, 1fr))`,
-                    gap: '1rem',
+                    background: theme.card,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 24,
+                    padding: 24,
                   }}
                 >
-                  <ScoreRing
-                    label="Resume Score"
-                    value={results?.score_data?.total_score ?? 0}
-                    color={scoreColors.resume}
-                    theme={theme}
-                  />
-                  <ScoreRing label="ATS Score" value={atsScore} color={scoreColors.ats} theme={theme} />
-                  {jdScore !== null && (
-                    <ScoreRing
-                      label="JD Match Score"
-                      value={Math.round(jdScore)}
-                      color={scoreColors.jd}
-                      theme={theme}
-                    />
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                    gap: '1rem',
-                  }}
-                >
-                  {/* ATS meter with pass/review/reject zones. */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45 }}
-                    style={{
-                      background: theme.surface,
-                      border: `1px solid ${theme.border}`,
-                      borderRadius: '1.5rem',
-                      padding: '1.25rem',
-                      boxShadow: theme.shadow,
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                      <div>
-                        <p style={{ margin: 0, color: theme.text, fontWeight: 800 }}>ATS Meter</p>
-                        <p style={{ margin: '0.35rem 0 0', color: theme.textSoft }}>
-                          Current status: <strong style={{ color: theme.text }}>{meterStatus}</strong>
-                        </p>
-                      </div>
-                      <span
-                        style={{
-                          padding: '0.45rem 0.75rem',
-                          borderRadius: '999px',
-                          background:
-                            meterStatus === 'Pass'
-                              ? theme.mintSoft
-                              : meterStatus === 'Review'
-                                ? theme.warningSoft
-                                : theme.dangerSoft,
-                          color: theme.text,
-                          fontWeight: 800,
-                        }}
-                      >
-                        {meterStatus}
-                      </span>
-                    </div>
-
-                    <div style={{ marginTop: '1.2rem' }}>
-                      <div
-                        style={{
-                          position: 'relative',
-                          width: '100%',
-                          height: '1rem',
-                          overflow: 'hidden',
-                          borderRadius: '999px',
-                          background: `linear-gradient(90deg,
-                            rgba(239,68,68,0.95) 0%,
-                            rgba(239,68,68,0.95) 33.33%,
-                            rgba(245,158,11,0.95) 33.33%,
-                            rgba(245,158,11,0.95) 66.66%,
-                            rgba(0,200,150,0.95) 66.66%,
-                            rgba(0,200,150,0.95) 100%)`,
-                        }}
-                      >
-                        <motion.div
-                          initial={{ left: 0 }}
-                          animate={{ left: `calc(${atsScore}% - 10px)` }}
-                          transition={{ duration: 0.9, ease: 'easeOut' }}
+                  <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>Missing Keywords</div>
+                  <div style={{ color: theme.muted, fontSize: 14, marginTop: 4 }}>
+                    Add these keywords naturally if they match your real experience.
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
+                    {(results?.jd_match?.missing_keywords || []).length > 0 ? (
+                      results.jd_match.missing_keywords.map((keyword) => (
+                        <div
+                          key={keyword}
                           style={{
-                            position: 'absolute',
-                            top: '-0.28rem',
-                            width: '1.25rem',
-                            height: '1.55rem',
-                            borderRadius: '999px',
-                            background: '#ffffff',
-                            border: `3px solid ${theme.background}`,
-                            boxShadow: '0 12px 24px rgba(15, 23, 42, 0.22)',
-                          }}
-                        />
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          marginTop: '0.7rem',
-                          color: theme.textSoft,
-                          fontSize: '0.88rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        <span>Reject</span>
-                        <span>Review</span>
-                        <span>Pass</span>
-                      </div>
-                    </div>
-                  </motion.div>
-
-                  {/* Section analysis pills for found and missing areas. */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, delay: 0.05 }}
-                    style={{
-                      background: theme.surface,
-                      border: `1px solid ${theme.border}`,
-                      borderRadius: '1.5rem',
-                      padding: '1.25rem',
-                      boxShadow: theme.shadow,
-                    }}
-                  >
-                    <p style={{ margin: 0, color: theme.text, fontWeight: 800 }}>Section Analysis</p>
-                    <p style={{ margin: '0.35rem 0 1rem', color: theme.textSoft }}>
-                      Green means detected. Red means the section likely needs attention.
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.7rem' }}>
-                      {sectionStatus.map((section) => (
-                        <motion.span
-                          key={section.label}
-                          whileHover={{ y: -2 }}
-                          style={{
-                            padding: '0.7rem 0.95rem',
-                            borderRadius: '999px',
-                            fontWeight: 800,
-                            fontSize: '0.92rem',
-                            background: section.found ? theme.mintSoft : theme.dangerSoft,
+                            padding: '9px 13px',
+                            borderRadius: 999,
+                            background: 'rgba(245,166,35,0.12)',
+                            border: `1px solid rgba(245,166,35,0.24)`,
                             color: theme.text,
-                            border: `1px solid ${section.found ? 'rgba(0,200,150,0.28)' : 'rgba(239,68,68,0.25)'}`,
+                            fontSize: 13,
+                            fontWeight: 700,
                           }}
                         >
-                          {section.found ? 'Found' : 'Missing'} {section.label}
-                        </motion.span>
-                      ))}
-                    </div>
-                  </motion.div>
+                          + {keyword}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: theme.muted, fontSize: 14 }}>No missing keywords were detected.</div>
+                    )}
+                  </div>
                 </div>
+              )}
 
-                {/* Missing keywords chip collection when JD is present. */}
-                {jdScore !== null && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, delay: 0.08 }}
-                    style={{
-                      background: theme.surface,
-                      border: `1px solid ${theme.border}`,
-                      borderRadius: '1.5rem',
-                      padding: '1.25rem',
-                      boxShadow: theme.shadow,
-                    }}
-                  >
-                    <p style={{ margin: 0, color: theme.text, fontWeight: 800 }}>Missing Keywords From JD</p>
-                    <p style={{ margin: '0.35rem 0 1rem', color: theme.textSoft }}>
-                      These terms show up in the job description but were not detected in the resume.
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.7rem' }}>
-                      {results?.jd_match?.missing_keywords?.length ? (
-                        results.jd_match.missing_keywords.map((keyword) => (
-                          <span
-                            key={keyword}
-                            style={{
-                              padding: '0.66rem 0.9rem',
-                              borderRadius: '999px',
-                              background: theme.warningSoft,
-                              border: '1px solid rgba(245, 158, 11, 0.25)',
-                              color: theme.text,
-                              fontWeight: 700,
-                            }}
-                          >
-                            {keyword}
-                          </span>
-                        ))
-                      ) : (
-                        <span style={{ color: theme.textSoft }}>No missing JD keywords detected.</span>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-
+              {/* AI feedback and ATS warning cards grouped together. */}
+              <div className="jobfit-main-grid">
                 <div
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
-                    gap: '1rem',
+                    background: theme.card,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 24,
+                    padding: 24,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 14,
                   }}
                 >
-                  {/* AI feedback card with bullet points. */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, delay: 0.1 }}
-                    style={{
-                      background: theme.surface,
-                      border: `1px solid ${theme.border}`,
-                      borderRadius: '1.5rem',
-                      padding: '1.25rem',
-                      boxShadow: theme.shadow,
-                    }}
-                  >
-                    <p style={{ margin: 0, color: theme.text, fontWeight: 800 }}>AI Feedback</p>
+                  <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>AI Feedback</div>
+                  {(feedbackPoints.length ? feedbackPoints : ['No AI feedback returned yet.']).map((point) => (
                     <div
+                      key={point}
                       style={{
-                        marginTop: '1rem',
-                        padding: '1rem',
-                        borderRadius: '1.2rem',
-                        background: theme.mutedSurface,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                        padding: '12px 14px',
+                        borderRadius: 18,
+                        background: dark ? 'rgba(255,255,255,0.02)' : '#fafafe',
                         border: `1px solid ${theme.border}`,
                       }}
                     >
-                      <ul style={{ margin: 0, paddingLeft: '1.1rem', color: theme.textSoft, lineHeight: 1.8 }}>
-                        {feedbackPoints.map((point) => (
-                          <li key={point} style={{ marginBottom: '0.55rem' }}>
-                            <span style={{ color: theme.text }}>{point}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <span
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          background: themeMap.accent,
+                          marginTop: 6,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span style={{ color: theme.text, fontSize: 14, lineHeight: 1.7 }}>{point}</span>
                     </div>
-                  </motion.div>
-
-                  {/* ATS warning cards rendered in red to call out issues. */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, delay: 0.14 }}
-                    style={{
-                      background: theme.surface,
-                      border: `1px solid ${theme.border}`,
-                      borderRadius: '1.5rem',
-                      padding: '1.25rem',
-                      boxShadow: theme.shadow,
-                    }}
-                  >
-                    <p style={{ margin: 0, color: theme.text, fontWeight: 800 }}>ATS Warnings</p>
-                    <div style={{ display: 'grid', gap: '0.8rem', marginTop: '1rem' }}>
-                      {results?.ats_issues?.length ? (
-                        results.ats_issues.map((issue) => (
-                          <div
-                            key={issue}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: '0.8rem',
-                              padding: '0.95rem 1rem',
-                              borderRadius: '1.1rem',
-                              background: theme.dangerSoft,
-                              border: '1px solid rgba(239, 68, 68, 0.25)',
-                            }}
-                          >
-                            <AlertTriangle size={18} color="#ef4444" style={{ marginTop: '0.12rem', flexShrink: 0 }} />
-                            <span style={{ color: theme.text, lineHeight: 1.6 }}>{issue}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.7rem',
-                            padding: '0.95rem 1rem',
-                            borderRadius: '1.1rem',
-                            background: theme.mintSoft,
-                            border: '1px solid rgba(0, 200, 150, 0.24)',
-                          }}
-                        >
-                          <CheckCircle2 size={18} color={theme.mint} />
-                          <span style={{ color: theme.text }}>No ATS warnings detected. Nice work.</span>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
+                  ))}
                 </div>
 
-                {/* Result actions for download and reset. */}
                 <div
                   style={{
+                    background: theme.card,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 24,
+                    padding: 24,
                     display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '0.9rem',
-                    justifyContent: 'flex-start',
+                    flexDirection: 'column',
+                    gap: 14,
                   }}
                 >
-                  <motion.button
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.99 }}
-                    type="button"
-                    onClick={handleDownload}
-                    style={{
-                      border: 'none',
-                      borderRadius: '1rem',
-                      padding: '0.95rem 1.15rem',
-                      background: `linear-gradient(135deg, ${theme.accent}, ${theme.mint})`,
-                      color: '#fff',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.7rem',
-                      fontWeight: 800,
-                    }}
-                  >
-                    <Download size={18} />
-                    Download Optimized Resume
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.99 }}
-                    type="button"
-                    onClick={handleReset}
-                    style={{
-                      borderRadius: '1rem',
-                      padding: '0.95rem 1.15rem',
-                      background: theme.surfaceStrong,
-                      color: theme.text,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.7rem',
-                      fontWeight: 800,
-                      border: `1px solid ${theme.border}`,
-                    }}
-                  >
-                    <RefreshCcw size={18} />
-                    Analyze Another
-                  </motion.button>
+                  <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>ATS Warnings</div>
+                  {(results?.ats_issues || []).length > 0 ? (
+                    results.ats_issues.map((issue) => (
+                      <div
+                        key={issue}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 12,
+                          padding: '14px 16px',
+                          borderRadius: 18,
+                          background: 'rgba(255,77,109,0.12)',
+                          border: `1px solid rgba(255,77,109,0.24)`,
+                        }}
+                      >
+                        <AlertTriangle size={18} color={themeMap.danger} style={{ marginTop: 2, flexShrink: 0 }} />
+                        <span style={{ color: theme.text, fontSize: 14, lineHeight: 1.7 }}>{issue}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '14px 16px',
+                        borderRadius: 18,
+                        background: 'rgba(0,200,150,0.12)',
+                        border: `1px solid rgba(0,200,150,0.24)`,
+                        color: theme.text,
+                        fontSize: 14,
+                        fontWeight: 700,
+                      }}
+                    >
+                      <CheckCircle size={18} color={themeMap.mint} />
+                      <span>No ATS warnings detected.</span>
+                    </div>
+                  )}
                 </div>
-              </motion.section>
-            )}
-          </AnimatePresence>
-        </main>
+              </div>
+
+              {/* Action buttons for download and reset. */}
+              <div className="jobfit-actions">
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  style={{
+                    border: 'none',
+                    borderRadius: 20,
+                    padding: '16px 18px',
+                    background: `linear-gradient(135deg, ${themeMap.accent}, ${themeMap.mint})`,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    fontSize: 15,
+                    fontWeight: 800,
+                  }}
+                >
+                  <Download size={18} />
+                  <span>Download Resume</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  style={{
+                    borderRadius: 20,
+                    padding: '16px 18px',
+                    background: theme.card,
+                    border: `1px solid ${theme.border}`,
+                    color: theme.text,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    fontSize: 15,
+                    fontWeight: 800,
+                  }}
+                >
+                  <RotateCcw size={18} />
+                  <span>Analyze Another</span>
+                </button>
+              </div>
+
+              {/* Collapsed extracted text section for debugging and transparency. */}
+              <details
+                style={{
+                  background: theme.card,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: 24,
+                  padding: 20,
+                }}
+              >
+                <summary style={{ cursor: 'pointer', color: theme.text, fontSize: 16, fontWeight: 800 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <FileText size={16} color={themeMap.accent} />
+                    <span>View Extracted Text</span>
+                  </span>
+                </summary>
+                <pre
+                  style={{
+                    margin: '16px 0 0',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    color: theme.muted,
+                    fontSize: 13,
+                    lineHeight: 1.75,
+                    fontFamily: 'Consolas, monospace',
+                  }}
+                >
+                  {results?.extracted_text || 'No extracted text available.'}
+                </pre>
+              </details>
+            </motion.section>
+          )}
+        </AnimatePresence>
       </div>
-    </>
+    </div>
   )
 }
 
