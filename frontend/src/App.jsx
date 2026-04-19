@@ -800,7 +800,7 @@ function App() {
                     display: 'block',
                     marginBottom: 10,
                     color: theme.muted,
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: 800,
                     letterSpacing: '0.12em',
                   }}
@@ -1000,11 +1000,15 @@ function App() {
               style={{ display: 'grid', gap: 18 }}
             >
               {/* Responsive score ring grid for the top metrics. */}
-              <div className="jobfit-results-grid">
-                <ScoreRing score={resumeScore} max={100} dark={dark} label="Resume Score" />
-                <ScoreRing score={atsScore} max={100} dark={dark} label="ATS Score" />
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: jdScore !== null ? 'repeat(3, minmax(0,1fr))' : 'repeat(2, minmax(0,1fr))',
+              gap: 18
+            }}>
+              <ScoreRing score={resumeScore} max={100} dark={dark} label="Resume Score" />
+              <ScoreRing score={atsScore} max={100} dark={dark} label="ATS Score" />
                 {jdScore !== null && <ScoreRing score={jdScore} max={100} dark={dark} label="JD Match" />}
-              </div>
+            </div>
 
               {/* Mid-page metrics split between ATS meter and section pills. */}
               <div className="jobfit-main-grid">
