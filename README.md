@@ -82,7 +82,7 @@ Open http://localhost:5173
 
 - **Institution:** Vidyavahini First Grade College, Tumkur
 - **Course:** Bachelor of Computer Applications (BCA)
-- **Academic Year:** 2024-25
+- **Academic Year:** 2025-26
 - **Domain:** AI + NLP + Full Stack Web Application
 
 ---
