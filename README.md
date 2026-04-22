@@ -38,6 +38,8 @@ JobFit Analyzer is a full-stack AI-powered web application that helps job seeker
 ---
 
 ## 📁 Project Structure
+
+```
 jobfit-analyzer/
 ├── backend/
 │   ├── main.py          # FastAPI entry point
@@ -52,8 +54,7 @@ jobfit-analyzer/
 │       └── App.jsx      # Complete React app
 ├── docker-compose.yml
 └── README.md
-
----
+```
 
 ## 🚀 How to Run Locally
 
@@ -86,15 +87,12 @@ Open http://localhost:5173
 
 ---
 
-## 👩‍💻 Developer
+## 👩‍💻 Developers
 
-- GitHub: 
+| Name | GitHub |
+|---|---|
+| **Diya Patel** | [@Diyapatel06](https://github.com/Diyapatel06) |
+| **Sameeksha TS** | [@Sameekshats](https://github.com/Sameekshats) |
+| **Goutham N** | [@Vihaan1906](https://github.com/Vihaan1906) |
+| **Kavya NR** | [@kavyanr22](https://github.com/kavyanr22) |
 
-**Diya Patel**
-[@Diyapatel06](https://github.com/Diyapatel06)
-**Sameeksha TS**
-[@Sameekshats](https://github.com/Sameekshats)
-**Goutham N**
-[@Vihaan1906](https://github.com/Vihaan1906)
-**Kavya NR**
-[@kavyanr22](https://github.com/kavyanr22)
