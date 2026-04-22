@@ -88,8 +88,13 @@ Open http://localhost:5173
 
 ## 👩‍💻 Developer
 
+- GitHub: 
+
 **Diya Patel**
-- GitHub: [@Diyapatel06](https://github.com/Diyapatel06)
+[@Diyapatel06](https://github.com/Diyapatel06)
+**Sameeksha TS**
 [@Sameekshats](https://github.com/Sameekshats)
+**Goutham N**
 [@Vihaan1906](https://github.com/Vihaan1906)
+**Kavya NR**
 [@kavyanr22](https://github.com/kavyanr22)
