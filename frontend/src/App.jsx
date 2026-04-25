@@ -70,10 +70,11 @@ const splitFeedback = (feedback) => {
   if (!feedback) return []
 
   return feedback
-    .replace(/Ã¢â‚¬Â¢/g, '•')
-    .split(/(?:\r?\n|•)/)
-    .map((item) => item.replace(/^[\s\-*•]+/, '').trim())
-    .filter(Boolean)
+    .replace(/\*\*/g, '')        // remove bold markdown
+    .replace(/#{1,3} /g, '')     // remove heading markdown
+    .split(/\n/)                  // split by newline
+    .map(item => item.replace(/^[\s\-*•]+/, '').trim())
+    .filter(item => item.length > 3)  // remove empty lines
 }
 
 const getScoreColor = (score) => {
@@ -1080,100 +1081,68 @@ function App() {
                   </div>
                 </div>
               )}
-
-              {/* AI feedback and ATS warning cards grouped together. */}
-              <div className="jobfit-main-grid">
-                <div
-                  style={{
-                    background: theme.card,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: 24,
-                    padding: 24,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 14,
-                  }}
-                >
-                  <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>AI Feedback</div>
-                  {(feedbackPoints.length ? feedbackPoints : ['No AI feedback returned yet.']).map((point) => (
-                    <div
-                      key={point}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 12,
-                        padding: '12px 14px',
-                        borderRadius: 18,
-                        background: dark ? 'rgba(255,255,255,0.02)' : '#fafafe',
-                        border: `1px solid ${theme.border}`,
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          background: themeMap.accent,
-                          marginTop: 6,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span style={{ color: theme.text, fontSize: 14, lineHeight: 1.7 }}>{point}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div
-                  style={{
-                    background: theme.card,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: 24,
-                    padding: 24,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 14,
-                  }}
-                >
-                  <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>ATS Warnings</div>
-                  {(results?.ats_issues || []).length > 0 ? (
-                    results.ats_issues.map((issue) => (
-                      <div
-                        key={issue}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: 12,
-                          padding: '14px 16px',
-                          borderRadius: 18,
-                          background: 'rgba(255,77,109,0.12)',
-                          border: `1px solid rgba(255,77,109,0.24)`,
-                        }}
-                      >
-                        <AlertTriangle size={18} color={themeMap.danger} style={{ marginTop: 2, flexShrink: 0 }} />
-                        <span style={{ color: theme.text, fontSize: 14, lineHeight: 1.7 }}>{issue}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        padding: '14px 16px',
-                        borderRadius: 18,
-                        background: 'rgba(0,200,150,0.12)',
-                        border: `1px solid rgba(0,200,150,0.24)`,
-                        color: theme.text,
-                        fontSize: 14,
-                        fontWeight: 700,
-                      }}
-                    >
-                      <CheckCircle size={18} color={themeMap.mint} />
-                      <span>No ATS warnings detected.</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+{/* AI Feedback card — Rich structured analysis */}
+<div style={{
+  background: theme.card,
+  border: `1px solid ${theme.border}`,
+  borderRadius: 24,
+  padding: 24,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 14,
+}}>
+  <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>
+    🧠 AI Resume Analysis
+  </div>
+  <div style={{
+    background: dark ? 'rgba(124,58,237,0.08)' : 'rgba(124,58,237,0.04)',
+    border: '1px solid rgba(124,58,237,0.2)',
+    borderRadius: 12,
+    padding: '10px 14px',
+    color: dark ? '#aaa' : '#666',
+    fontSize: 13,
+  }}>
+    Powered by Gemini 2.0 Flash — Recruiter + ATS + Career Coach simulation
+  </div>
+  {feedbackPoints.length > 0 ? (
+    feedbackPoints.map((point, index) => (
+      <motion.div
+        key={index}
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: index * 0.05 }}
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 12,
+          padding: '12px 14px',
+          borderRadius: 14,
+          background: dark ? 'rgba(255,255,255,0.02)' : '#fafafe',
+          border: `1px solid ${theme.border}`,
+        }}
+      >
+        <span style={{
+          width: 10, height: 10,
+          borderRadius: '50%',
+          background: themeMap.accent,
+          marginTop: 6, flexShrink: 0,
+        }} />
+        <span style={{
+          color: theme.text,
+          fontSize: 14,
+          lineHeight: 1.7,
+          whiteSpace: 'pre-wrap'
+        }}>
+          {point}
+        </span>
+      </motion.div>
+    ))
+  ) : (
+    <div style={{ color: theme.muted, fontSize: 14 }}>
+      No AI analysis returned yet.
+    </div>
+  )}
+</div>
 
               {/* Action buttons for download and reset. */}
               <div className="jobfit-actions">
