@@ -46,10 +46,10 @@ async def upload_resume(
     # Step 4 — ATS check
     ats_issues = check_ats(text)
 
-    # Step 5 — JD match
+    # Step 5 — JD match (match_score is now out of 10, not 100)
     jd_match = match_jd(text, jd_text or "")
 
-    # Step 6 — AI feedback (10-section analysis)
+    # Step 6 — AI feedback (structured |SECTION| delimited analysis)
     ai_feedback = get_ai_feedback(
         text,
         jd_text or "",
@@ -71,7 +71,7 @@ async def upload_resume(
         "optimized_text": optimized_text,
         "score_data": score_data,
         "ats_issues": ats_issues,
-        "jd_match": jd_match,
+        "jd_match": jd_match,          # match_score is 0.0–10.0
         "ai_feedback": ai_feedback,
         "platform": platform or "general"
     }
@@ -86,7 +86,7 @@ async def download_resume(
     role: Optional[str] = Form(None)
 ):
     # Use edited resume text if provided directly
-    # Otherwise parse from file
+    # Otherwise parse from uploaded file
     if resume_text and resume_text.strip():
         text = resume_text
         optimized = resume_text
@@ -99,7 +99,6 @@ async def download_resume(
     else:
         return {"error": "No resume content provided"}
 
-    # Generate platform-specific DOCX
     from templates import generate_resume_docx
     docx_bytes = generate_resume_docx(text, optimized, platform or "general")
 
