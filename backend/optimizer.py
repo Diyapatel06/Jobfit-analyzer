@@ -51,78 +51,90 @@ def get_ai_feedback(
     platform: str = "",
     role: str = ""
 ) -> str:
-    # Returns structured 10-section AI analysis as plain text
+    """
+    Returns structured AI analysis as plain text.
+    Sections are separated by |SECTION| markers for easy frontend parsing.
+    """
 
     if not client:
         return "Add your GEMINI_API_KEY to backend/.env to enable AI analysis."
 
     try:
         jd_section = (
-            f"JOB DESCRIPTION:\n{jd_text[:1500]}"
+            f"JOB DESCRIPTION:\n{jd_text[:2000]}"
             if jd_text and jd_text.strip()
             else f"No JD provided. Analyze resume quality for a {role or 'software'} role."
         )
 
-        prompt = f"""You are an advanced AI Resume Analyzer inside a platform called JobFit Analyzer.
-
-Analyze the resume against the job description like a recruiter, ATS system, and career coach.
-Be specific to THIS resume. Never give generic advice.
-Use plain text only. No markdown symbols like **, ##, or *.
+        prompt = f"""You are an expert AI Resume Analyzer for a platform called JobFit Analyzer.
+Analyze this exact resume against this exact job description. Be 100% specific — never give generic advice.
+Use plain text only. No markdown, no **, no ##, no *.
 
 RESUME:
-{resume_text[:2500]}
+{resume_text[:3000]}
 
 {jd_section}
 
 TARGET ROLE: {role or "Not specified"}
 TARGET PLATFORM: {platform or "General"}
 
-Output EXACTLY these 10 sections with these exact headings:
+Output EXACTLY these sections with EXACTLY these pipe-separated markers as shown. Do not add any extra text before or after the markers.
 
-1. MATCH SCORE
-Give a percentage from 0 to 100 based on skills match 40 percent, experience relevance 30 percent, projects relevance 20 percent, certifications and extras 10 percent. Write a 2 to 3 line explanation of the score.
+|SECTION|READINESS_SCORE
+Write exactly: You are X% ready to become a [role from JD or target role].
+Then on the next line write exactly: To reach 85% readiness:
+Then list 3 to 5 specific things from THIS resume and THIS JD only. Each on its own line starting with ITEM:
+Example:
+ITEM: Learn Docker — the JD requires containerization but your resume shows no container experience
+ITEM: Add SQL query examples — the JD mentions "complex SQL queries" but your skills section only lists SQL without specifics
+ITEM: Mention your MongoDB certification from [certificate name if present] in the Skills section header
 
-2. RECRUITER DECISION
-Classify the candidate as exactly one of: Rejected, Maybe, or Shortlisted.
-Explain the decision in 3 bullet points using real hiring logic specific to this resume.
+|SECTION|RECRUITER_DECISION
+Write exactly one of: SHORTLISTED or MAYBE or REJECTED
+Then on the next line write a 2-sentence recruiter reasoning specific to this resume and JD only.
 
-3. MISSING KEYWORDS
-List keywords from the JD missing in the resume.
-Critical Missing: list the most important ones
-Secondary Missing: list medium priority ones
-Only include role-relevant terms.
+|SECTION|ATS_SCORE
+Write exactly: ATS Score: X/10
+Then on next line write: JD Match: Y/10
+Then on next line write: Keyword Coverage: Z/10
+These numbers must be based on actual analysis of the resume vs JD. Do not default to high scores.
+Then write 2-3 sentences explaining the scores referencing specific missing or present elements.
 
-4. ATS RISK ALERTS
-List 4 to 6 specific issues found in this resume such as missing measurable achievements, generic project descriptions, missing tools from JD, weak summary, or poor alignment with target role.
-Be specific to this resume only.
+|SECTION|MISSING_SKILLS
+List only skills and tools explicitly mentioned in the JD that are NOT found anywhere in the resume.
+Format each as: CRITICAL: [skill] — [why it matters for this specific JD]
+Or: SECONDARY: [skill] — [why it matters for this specific JD]
+Maximum 8 items. Only include real gaps — do not invent missing skills.
 
-5. SECTION FEEDBACK
-For each of these sections: Summary, Skills, Projects, Experience
-State exactly what is wrong and what should be improved.
+|SECTION|IMPROVEMENTS
+List 4 to 6 specific improvements for THIS resume based on THIS JD.
+Each must reference a real section or line from the resume.
+Format each as: IMPROVE: [specific change] — [exact reason tied to JD requirement]
 
-6. ACTIONABLE IMPROVEMENTS
-Give 4 to 6 exact practical suggestions including specific tools to add, how to rewrite content, where to include keywords naturally, and how to add measurable impact with examples.
+|SECTION|REWRITE
+Pick the weakest section (Summary or one Project) from this resume.
+Write: REWRITING: [section name]
+Then write the original line or paragraph.
+Then write: IMPROVED VERSION:
+Then write the rewritten version with action verbs, metrics, and keywords from the JD woven in naturally.
 
-7. RESUME REWRITE
-Rewrite either the Summary section or one Project description into a strong version using action verbs and measurable metrics. Label clearly which section you are rewriting.
+|SECTION|TIPS_AND_TRICKS
+Write 4 to 6 platform-specific and role-specific tips for this candidate only.
+These must be actionable tactics — not generic resume advice.
+Base each tip on what you see in their resume and what the JD asks for.
+Format each as: TIP: [specific tip tied to this resume and JD]
 
-8. CAREER GAP ANALYSIS
-Start with: You are X percent ready for this role.
-Then list skills to learn, projects to add, and improvements needed to reach 85 to 90 percent readiness.
-
-9. INTERVIEW PREPARATION
-List 2 to 3 interview questions likely to be asked based on this specific resume and JD.
-Add 1 practical preparation tip specific to this candidate.
-
-10. FINAL ADVICE
-State the single biggest weakness in this resume.
-State one high-impact change that will significantly improve shortlisting chances.
+|SECTION|INTERVIEW_PREP
+List 3 interview questions likely to be asked based on this specific resume and JD.
+Format each as: Q: [question]
+Then write: PREP TIP: [one specific preparation advice for this candidate]
 
 Rules:
-- No asterisks, no hash symbols, no markdown formatting of any kind
-- Every point must be specific to the resume and JD provided
-- Do not assume skills not present in the resume
-- Keep each section concise and actionable"""
+- Every single point must be derived from the actual resume text and actual JD text provided
+- Do not invent skills, experiences, or certifications not present in the resume
+- Do not give generic advice that could apply to anyone
+- Scores should reflect real gaps — a resume with 3 matching skills out of 15 JD requirements should score low
+- Keep language direct, recruiter-style, no fluff"""
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",
@@ -132,15 +144,29 @@ Rules:
 
     except Exception as e:
         return (
-            "1. MATCH SCORE\n"
-            "Unable to calculate score - API unavailable.\n\n"
-            "2. RECRUITER DECISION\n"
-            "Maybe\n"
-            "- Resume has basic structure but needs improvement\n"
-            "- Add more relevant keywords from the job description\n"
-            "- Quantify achievements with numbers and metrics\n\n"
-            "10. FINAL ADVICE\n"
-            "Add your GEMINI_API_KEY to backend/.env to get full analysis."
+            "|SECTION|READINESS_SCORE\n"
+            "You are 0% ready — API unavailable.\n"
+            "To reach 85% readiness:\n"
+            "ITEM: Add your GEMINI_API_KEY to backend/.env to get full analysis\n\n"
+            "|SECTION|RECRUITER_DECISION\n"
+            "MAYBE\n"
+            "API key missing — connect Gemini to get real recruiter analysis.\n\n"
+            "|SECTION|ATS_SCORE\n"
+            "ATS Score: 0/10\n"
+            "JD Match: 0/10\n"
+            "Keyword Coverage: 0/10\n"
+            "Add GEMINI_API_KEY to get real scores.\n\n"
+            "|SECTION|MISSING_SKILLS\n"
+            "CRITICAL: API Key — Add GEMINI_API_KEY to backend/.env\n\n"
+            "|SECTION|IMPROVEMENTS\n"
+            "IMPROVE: Add API key — Connect Gemini to get specific improvements\n\n"
+            "|SECTION|REWRITE\n"
+            "REWRITING: N/A\nConnect Gemini API to get resume rewrite.\n\n"
+            "|SECTION|TIPS_AND_TRICKS\n"
+            "TIP: Add your GEMINI_API_KEY to backend/.env to unlock tips\n\n"
+            "|SECTION|INTERVIEW_PREP\n"
+            "Q: Connect Gemini API to get interview questions\n"
+            "PREP TIP: Add GEMINI_API_KEY to backend/.env"
         )
 
 
@@ -150,7 +176,7 @@ def get_optimized_resume(
     role: str = "",
     platform: str = ""
 ) -> str:
-    # Returns AI-rewritten resume text with keywords added
+    """Returns AI-rewritten resume text with keywords added naturally."""
 
     if not client:
         return resume_text
@@ -167,17 +193,18 @@ def get_optimized_resume(
         prompt = f"""You are a professional resume writer and ATS optimization expert.
 
 Rewrite this resume with these requirements:
-1. Naturally incorporate these missing keywords: {keywords_str}
+1. Naturally incorporate these missing keywords where they genuinely apply: {keywords_str}
 2. {role_line}
 3. {platform_line}
-4. Keep ALL original facts, dates, companies, and achievements
-5. Only improve wording and add missing keywords naturally
-6. Make it ATS-friendly with plain text, no tables, no graphics
+4. Keep ALL original facts, dates, companies, education, and achievements — do not invent anything
+5. Only improve wording and add missing keywords naturally where they fit
+6. Make it ATS-friendly: plain text, no tables, no graphics, no special characters
 7. Use strong action verbs at the start of each bullet point
-8. Return ONLY the improved resume text with no explanations
+8. Improve measurability — add metrics where implied but not stated
+9. Return ONLY the improved resume text with no explanations, no preamble, no commentary
 
 Original Resume:
-{resume_text[:2500]}"""
+{resume_text[:3000]}"""
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",
