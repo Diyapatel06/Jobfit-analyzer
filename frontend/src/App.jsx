@@ -68,13 +68,10 @@ const normalizeResumeScore = (score) => clamp(Math.round((Number(score) || 0) / 
 
 const splitFeedback = (feedback) => {
   if (!feedback) return []
-
   return feedback
-    .replace(/\*\*/g, '')        // remove bold markdown
-    .replace(/#{1,3} /g, '')     // remove heading markdown
-    .split(/\n/)                  // split by newline
-    .map(item => item.replace(/^[\s\-*•]+/, '').trim())
-    .filter(item => item.length > 3)  // remove empty lines
+    .split(/\n/)
+    .map(item => item.trim())
+    .filter(item => item.length > 2)
 }
 
 const getScoreColor = (score) => {
@@ -391,6 +388,9 @@ function App() {
 
   // Supporting UI state for responsive polish and loading feedback.
   const [loadingIndex, setLoadingIndex] = useState(0)
+  const [editedResume, setEditedResume] = useState('')
+  const [selectedFormat, setSelectedFormat] = useState('general')
+  const [showEditor, setShowEditor] = useState(false)
 
   const theme = getActiveTheme(dark)
 
@@ -460,6 +460,9 @@ function App() {
 
       const response = await axios.post('http://localhost:8000/upload', formData)
       setResults(response.data)
+      setResults(response.data)
+      setEditedResume(response.data.optimized_text || response.data.extracted_text || '')
+      setShowEditor(false)
     } catch (requestError) {
       setError(requestError?.response?.data?.detail || requestError?.message || 'Failed to analyze the resume.')
     } finally {
@@ -468,55 +471,59 @@ function App() {
   }
 
   // Trigger optimized resume download from the backend.
-  const handleDownload = async () => {
-    if (!file) return
+const handleDownload = async () => {
+  setDownloadLoading(true)
+  setDownloadSuccess(false)
+  setError(null)
 
+  try {
     const formData = new FormData()
-    formData.append('file', file)
+    // Send the edited resume text directly
+    formData.append('resume_text', editedResume)
+    formData.append('platform', selectedFormat)
     if (jdText) formData.append('jd_text', jdText)
-    if (platform) formData.append('platform', platform)
     formData.append('role', role)
 
-    try {
-      setDownloadLoading(true)
-      setDownloadSuccess(false)
-      setError(null)
+    const response = await axios.post(
+      'http://localhost:8000/download',
+      formData,
+      { responseType: 'blob' }
+    )
 
-      const response = await axios.post('http://localhost:8000/download', formData, {
-        responseType: 'blob',
-      })
-
-      const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `optimized_resume_${platform || 'general'}.docx`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-      setDownloadSuccess(true)
-    } catch (requestError) {
-      setError(requestError?.message || 'Failed to download the optimized resume.')
-      setDownloadSuccess(false)
-    } finally {
-      setDownloadLoading(false)
-    }
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `optimized_resume_${selectedFormat}.docx`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+    setDownloadSuccess(true)
+    setTimeout(() => setDownloadSuccess(false), 3000)
+  } catch (err) {
+    setError('Download failed. Make sure the backend is running.')
+  } finally {
+    setDownloadLoading(false)
   }
+}
 
   // Reset the analyzer so another resume can be processed.
   const handleReset = () => {
     setFile(null)
-    setJdText('')
-    setPlatform(null)
-    setRole('')
-    setLoading(false)
-    setResults(null)
-    setError(null)
-    setDownloadLoading(false)
-    setDownloadSuccess(false)
+  setJdText('')
+  setPlatform(null)
+  setRole('')
+  setLoading(false)
+  setResults(null)
+  setError(null)
+  setDownloadLoading(false)
+  setDownloadSuccess(false)
+  setEditedResume('')
+  setSelectedFormat('general')
+  setShowEditor(false)
   }
 
   return (
@@ -1145,77 +1152,330 @@ function App() {
 </div>
 
               {/* Action buttons for download and reset. */}
-              <div className="jobfit-actions">
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  disabled={downloadLoading}
-                  style={{
-                    border: 'none',
-                    borderRadius: 20,
-                    padding: '16px 18px',
-                    background: `linear-gradient(135deg, ${themeMap.accent}, ${themeMap.mint})`,
-                    color: '#fff',
-                    cursor: downloadLoading ? 'not-allowed' : 'pointer',
-                    opacity: downloadLoading ? 0.7 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    fontSize: 15,
-                    fontWeight: 800,
-                  }}
-                >
-                  <Download size={18} />
-                  <span>{downloadLoading ? 'Preparing Download...' : 'Download Resume'}</span>
-                </button>
+              {/* ── FORMAT SELECTOR ── */}
+<div style={{
+  background: theme.card,
+  border: `1px solid ${theme.border}`,
+  borderRadius: 24,
+  padding: 24,
+}}>
+  <div style={{ color: theme.text, fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
+    Choose Resume Format
+  </div>
+  <div style={{ color: theme.muted, fontSize: 14, marginBottom: 18 }}>
+    Select the platform format for your downloaded resume. Each format is optimized for that portal's ATS.
+  </div>
+  <div style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: 14
+  }}>
+    {[
+      {
+        id: 'linkedin',
+        emoji: '💼',
+        label: 'LinkedIn',
+        color: '#0077b5',
+        desc: 'Professional summary first, headline focused, achievement-oriented bullet points'
+      },
+      {
+        id: 'naukri',
+        emoji: '🔶',
+        label: 'Naukri',
+        color: '#ff7555',
+        desc: 'Skills and career objective first, keyword-rich, ATS-optimized for Indian recruiters'
+      },
+      {
+        id: 'internshala',
+        emoji: '🎓',
+        label: 'Internshala',
+        color: '#1bca8c',
+        desc: 'Education and projects first, fresher-friendly, internship-focused structure'
+      },
+      {
+        id: 'general',
+        emoji: '📄',
+        label: 'General ATS',
+        color: '#7c3aed',
+        desc: 'Clean single-column format, works for any ATS system or job portal'
+      }
+    ].map(fmt => (
+      <button
+        key={fmt.id}
+        type="button"
+        onClick={() => setSelectedFormat(fmt.id)}
+        style={{
+          borderRadius: 18,
+          border: selectedFormat === fmt.id
+            ? `2px solid ${fmt.color}`
+            : `1px solid ${theme.border}`,
+          background: selectedFormat === fmt.id
+            ? `${fmt.color}18`
+            : theme.card,
+          padding: '16px 14px',
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'all 0.2s',
+        }}
+      >
+        <div style={{ fontSize: 22, marginBottom: 6 }}>{fmt.emoji}</div>
+        <div style={{
+          color: selectedFormat === fmt.id ? fmt.color : theme.text,
+          fontSize: 15,
+          fontWeight: 800,
+          marginBottom: 6
+        }}>
+          {fmt.label}
+        </div>
+        <div style={{ color: theme.muted, fontSize: 12, lineHeight: 1.5 }}>
+          {fmt.desc}
+        </div>
+        {selectedFormat === fmt.id && (
+          <div style={{
+            marginTop: 8,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11,
+            color: fmt.color,
+            fontWeight: 700
+          }}>
+            <CheckCircle size={12} /> Selected
+          </div>
+        )}
+      </button>
+    ))}
+  </div>
+</div>
 
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  style={{
-                    borderRadius: 20,
-                    padding: '16px 18px',
-                    background: theme.card,
-                    border: `1px solid ${theme.border}`,
-                    color: theme.text,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    fontSize: 15,
-                    fontWeight: 800,
-                  }}
-                >
-                  <RotateCcw size={18} />
-                  <span>Analyze Another</span>
-                </button>
-              </div>
+{/* ── LIVE RESUME EDITOR ── */}
+<div style={{
+  background: theme.card,
+  border: `1px solid ${theme.border}`,
+  borderRadius: 24,
+  padding: 24,
+}}>
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 14
+  }}>
+    <div>
+      <div style={{ color: theme.text, fontSize: 18, fontWeight: 800 }}>
+        Live Resume Editor
+      </div>
+      <div style={{ color: theme.muted, fontSize: 13, marginTop: 4 }}>
+        This is your AI-optimized resume. Edit directly, then download with your chosen format above.
+      </div>
+    </div>
+    <button
+      type="button"
+      onClick={() => setShowEditor(prev => !prev)}
+      style={{
+        background: showEditor ? 'rgba(124,58,237,0.15)' : theme.card,
+        border: `1px solid ${showEditor ? themeMap.accent : theme.border}`,
+        borderRadius: 12,
+        padding: '8px 16px',
+        color: showEditor ? themeMap.accent : theme.text,
+        fontWeight: 700,
+        fontSize: 13,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        transition: 'all 0.2s'
+      }}
+    >
+      {showEditor ? 'Hide Editor' : 'Open Editor'}
+    </button>
+  </div>
 
-              {/* Success feedback after the optimized resume download completes. */}
-              <AnimatePresence>
-                {downloadSuccess && (
-                  <MotionDiv
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    style={{
-                      padding: '14px 16px',
-                      borderRadius: 18,
-                      background: 'rgba(0,200,150,0.12)',
-                      border: '1px solid rgba(0,200,150,0.24)',
-                      color: theme.text,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                    }}
-                  >
-                    <CheckCircle size={16} color={themeMap.mint} />
-                    <span>Download complete. Your optimized resume has been saved.</span>
-                  </MotionDiv>
-                )}
-              </AnimatePresence>
+  <AnimatePresence>
+    {showEditor && (
+      <motion.div
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: 'auto' }}
+        exit={{ opacity: 0, height: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        {/* Editor toolbar */}
+        <div style={{
+          display: 'flex',
+          gap: 10,
+          marginBottom: 10,
+          flexWrap: 'wrap'
+        }}>
+          <button
+            type="button"
+            onClick={() => setEditedResume(results.optimized_text || results.extracted_text || '')}
+            style={{
+              background: 'rgba(0,200,150,0.12)',
+              border: '1px solid rgba(0,200,150,0.3)',
+              borderRadius: 8,
+              padding: '6px 14px',
+              color: themeMap.mint,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit'
+            }}
+          >
+            Reset to AI Version
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditedResume(results.extracted_text || '')}
+            style={{
+              background: 'rgba(245,166,35,0.12)',
+              border: '1px solid rgba(245,166,35,0.3)',
+              borderRadius: 8,
+              padding: '6px 14px',
+              color: themeMap.warning,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit'
+            }}
+          >
+            Reset to Original
+          </button>
+          <div style={{
+            marginLeft: 'auto',
+            color: theme.muted,
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            {editedResume.length} characters
+          </div>
+        </div>
+
+        {/* Actual editor */}
+        <textarea
+          value={editedResume}
+          onChange={e => setEditedResume(e.target.value)}
+          style={{
+            width: '100%',
+            minHeight: 420,
+            resize: 'vertical',
+            borderRadius: 16,
+            border: `1px solid ${theme.border}`,
+            background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa',
+            color: theme.text,
+            padding: '16px',
+            fontSize: 13,
+            lineHeight: 1.8,
+            fontFamily: 'Consolas, "Courier New", monospace',
+            outline: 'none',
+            boxSizing: 'border-box',
+            transition: 'border 0.2s'
+          }}
+          onFocus={e => e.target.style.borderColor = themeMap.accent}
+          onBlur={e => e.target.style.borderColor = theme.border}
+          placeholder="Your AI-optimized resume will appear here for editing..."
+          spellCheck={true}
+        />
+
+        <div style={{
+          marginTop: 10,
+          padding: '10px 14px',
+          background: dark ? 'rgba(124,58,237,0.08)' : 'rgba(124,58,237,0.05)',
+          border: '1px solid rgba(124,58,237,0.2)',
+          borderRadius: 10,
+          color: theme.muted,
+          fontSize: 12,
+          lineHeight: 1.6
+        }}>
+          Tip: Edit this text to add your own changes, then click Download Resume below to get the final formatted DOCX in your chosen format.
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+</div>
+
+{/* ── ACTION BUTTONS ── */}
+<div className="jobfit-actions">
+  <button
+    type="button"
+    onClick={handleDownload}
+    disabled={downloadLoading}
+    style={{
+      border: 'none',
+      borderRadius: 20,
+      padding: '16px 18px',
+      background: `linear-gradient(135deg, ${themeMap.accent}, ${themeMap.mint})`,
+      color: '#fff',
+      cursor: downloadLoading ? 'not-allowed' : 'pointer',
+      opacity: downloadLoading ? 0.7 : 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      fontSize: 15,
+      fontWeight: 800,
+    }}
+  >
+    <Download size={18} />
+    <span>
+      {downloadLoading
+        ? 'Generating...'
+        : `Download ${
+            selectedFormat === 'linkedin' ? 'LinkedIn' :
+            selectedFormat === 'naukri' ? 'Naukri' :
+            selectedFormat === 'internshala' ? 'Internshala' :
+            'General ATS'
+          } Resume`
+      }
+    </span>
+  </button>
+
+  <button
+    type="button"
+    onClick={handleReset}
+    style={{
+      borderRadius: 20,
+      padding: '16px 18px',
+      background: theme.card,
+      border: `1px solid ${theme.border}`,
+      color: theme.text,
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      fontSize: 15,
+      fontWeight: 800,
+    }}
+  >
+    <RotateCcw size={18} />
+    <span>Analyze Another</span>
+  </button>
+</div>
+
+{/* Download success message */}
+<AnimatePresence>
+  {downloadSuccess && (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      style={{
+        padding: '14px 16px',
+        borderRadius: 18,
+        background: 'rgba(0,200,150,0.12)',
+        border: '1px solid rgba(0,200,150,0.24)',
+        color: theme.text,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+      }}
+    >
+      <CheckCircle size={16} color={themeMap.mint} />
+      <span>Download complete. Your optimized resume has been saved.</span>
+    </motion.div>
+  )}
+</AnimatePresence>
 
               {/* Collapsed extracted text section for debugging and transparency. */}
               <details
