@@ -9,7 +9,7 @@ from typing import Optional
 from parser import parse_resume
 from scorer import score_resume, check_ats
 from matcher import match_jd
-from optimizer import get_ai_feedback
+from optimizer import get_ai_feedback, get_optimized_resume
 
 app = FastAPI(title="JobFit Analyzer API")
 
@@ -59,8 +59,12 @@ async def upload_resume(
 
     # Step 7 — generate optimized resume text
     missing = jd_match.get("missing_keywords", [])
-   
-    
+    optimized_text = get_optimized_resume(
+        text,
+        missing,
+        role or "",
+        platform or ""
+    )
 
     return {
         "extracted_text": text,
