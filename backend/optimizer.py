@@ -241,4 +241,3 @@ Original Resume:
     except Exception as e:
         print(f"Gemini API error in get_optimized_resume: {e}")
         return resume_text
-    
