@@ -1,5 +1,4 @@
-# main.py
-# FastAPI entry point — all routes
+# main.py — FastAPI entry point
 
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +8,7 @@ from typing import Optional
 from parser import parse_resume
 from scorer import score_resume, check_ats
 from matcher import match_jd
-from optimizer import get_ai_feedback, get_optimized_resume
+from optimizer import get_ai_feedback, get_optimized_resume, get_jd_diff
 
 app = FastAPI(title="JobFit Analyzer API")
 
@@ -40,16 +39,17 @@ async def upload_resume(
     # Step 2 — extract text
     text = parse_resume(file.filename, file_bytes)
 
-    # Step 3 — score resume
+    # Step 3 — score resume (out of 90, frontend normalizes to 10)
     score_data = score_resume(text)
 
     # Step 4 — ATS check
     ats_issues = check_ats(text)
 
-    # Step 5 — JD match (match_score is now out of 10, not 100)
+    # Step 5 — JD match using TF-IDF cosine similarity
     jd_match = match_jd(text, jd_text or "")
+    missing = jd_match.get("missing_keywords", [])
 
-    # Step 6 — AI feedback (structured |SECTION| delimited analysis)
+    # Step 6 — AI 10-section analysis
     ai_feedback = get_ai_feedback(
         text,
         jd_text or "",
@@ -57,8 +57,7 @@ async def upload_resume(
         role or ""
     )
 
-    # Step 7 — generate optimized resume text
-    missing = jd_match.get("missing_keywords", [])
+    # Step 7 — Generate optimized resume text for editor
     optimized_text = get_optimized_resume(
         text,
         missing,
@@ -66,12 +65,21 @@ async def upload_resume(
         platform or ""
     )
 
+    # Step 8 — Generate JD diff for panel 2
+    jd_diff = get_jd_diff(
+        text,
+        jd_text or "",
+        missing,
+        role or ""
+    )
+
     return {
         "extracted_text": text,
         "optimized_text": optimized_text,
+        "jd_diff": jd_diff,
         "score_data": score_data,
         "ats_issues": ats_issues,
-        "jd_match": jd_match,          # match_score is 0.0–10.0
+        "jd_match": jd_match,
         "ai_feedback": ai_feedback,
         "platform": platform or "general"
     }
@@ -85,8 +93,7 @@ async def download_resume(
     platform: Optional[str] = Form(None),
     role: Optional[str] = Form(None)
 ):
-    # Use edited resume text if provided directly
-    # Otherwise parse from uploaded file
+    # Use edited resume text from live editor if provided
     if resume_text and resume_text.strip():
         text = resume_text
         optimized = resume_text
