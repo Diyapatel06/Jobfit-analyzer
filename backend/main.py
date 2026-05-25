@@ -20,11 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/")
 def home():
     return {"message": "JobFit Analyzer API is running"}
-
 
 @app.post("/upload")
 async def upload_resume(
@@ -45,19 +43,11 @@ async def upload_resume(
     # Step 4 — ATS check
     ats_issues = check_ats(text)
 
-<<<<<<< HEAD
-    # Step 5 — JD match using TF-IDF cosine similarity
-=======
     # Step 5 — JD match (match_score is now out of 10, not 100)
->>>>>>> 3d4e9fb404442bf9c89cfe9673610c5875d8215c
     jd_match = match_jd(text, jd_text or "")
     missing = jd_match.get("missing_keywords", [])
 
-<<<<<<< HEAD
-    # Step 6 — AI 10-section analysis
-=======
     # Step 6 — AI feedback (structured |SECTION| delimited analysis)
->>>>>>> 3d4e9fb404442bf9c89cfe9673610c5875d8215c
     ai_feedback = get_ai_feedback(
         text,
         jd_text or "",
@@ -87,11 +77,10 @@ async def upload_resume(
         "jd_diff": jd_diff,
         "score_data": score_data,
         "ats_issues": ats_issues,
-        "jd_match": jd_match,          # match_score is 0.0–10.0
+        "jd_match": jd_match,
         "ai_feedback": ai_feedback,
         "platform": platform or "general"
     }
-
 
 @app.post("/download")
 async def download_resume(
@@ -101,12 +90,8 @@ async def download_resume(
     platform: Optional[str] = Form(None),
     role: Optional[str] = Form(None)
 ):
-<<<<<<< HEAD
-    # Use edited resume text from live editor if provided
-=======
     # Use edited resume text if provided directly
     # Otherwise parse from uploaded file
->>>>>>> 3d4e9fb404442bf9c89cfe9673610c5875d8215c
     if resume_text and resume_text.strip():
         text = resume_text
         optimized = resume_text
