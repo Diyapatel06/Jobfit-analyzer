@@ -24,7 +24,7 @@ if api_key and api_key.strip():
     try:
         genai.configure(api_key=api_key.strip())
 
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
         print(f"Gemini API connected successfully - key ends with ...{api_key.strip()[-6:]}")
     except Exception as e:
