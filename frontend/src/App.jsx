@@ -313,7 +313,7 @@ function ScoreRing({ score, max = 100, dark, label }) {
   )
 }
 
-// Readiness section — the big "You are X% ready" card
+// Readiness section — the big "You are X% ready" card 
 function ReadinessCard({ text, role, dark }) {
   const theme = getTheme(dark)
   const score = extractReadinessScore(text)
